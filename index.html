@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>PS1 Forest</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --fog:    #1a3a33;          /* foggy forest teal                  */
+        --deep:   #06120f;          /* forest floor dark                  */
+        --box:    rgba(12,30,64,0.80);   /* PS1 translucent navy menu box */
+        --box-lt: rgba(20,46,96,0.85);
+        --edge:   #6fb6e8;          /* PS1 light-blue border              */
+        --edge-d: #2b5e93;
+        --text:   #eaf3ff;
+        --cyan:   #8fe6ff;
+        --leaf:   #9ad27a;          /* forest green accent                */
+        --dim:    #93b2cc;
+        --ink:    #06121f;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--deep); }
+      body { font-family: 'Chakra Petch', system-ui, sans-serif; color: var(--text); }
+      #app { position: fixed; inset: 0; }
+      #app canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+      /* ── Foggy-forest backdrop + treeline silhouette + soft scanlines ── */
+      #overlay {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        padding: 20px; user-select: none; transition: opacity .22s ease;
+        background:
+          radial-gradient(90% 70% at 50% 28%, rgba(150,190,170,0.16), transparent 60%),
+          linear-gradient(180deg, #12302a 0%, #0c211c 48%, var(--deep) 100%);
+      }
+      /* tree silhouette band */
+      #overlay::before {
+        content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42%;
+        background:
+          linear-gradient(180deg, transparent, rgba(6,18,15,0.55) 55%, var(--deep)),
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='80' viewBox='0 0 240 80'%3E%3Cpath fill='%23081a14' d='M0,80 L10,34 L20,80 L30,18 L40,80 L52,40 L64,80 L74,10 L86,80 L98,30 L110,80 L120,46 L132,80 L144,16 L156,80 L168,38 L180,80 L192,8 L204,80 L214,32 L226,80 L240,22 L240,80 Z'/%3E%3C/svg%3E") repeat-x bottom / 360px 120px;
+        opacity: 0.9; pointer-events: none;
+      }
+      #overlay::after {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,0.16) 2px 4px);
+        box-shadow: inset 0 0 160px rgba(0,0,0,0.55);
+      }
+      #overlay.hidden { opacity: 0; pointer-events: none; }
+      #overlay.loading { background: var(--deep); }
+      #overlay.loading::before { opacity: 0.35; }
+      #overlay.loading .card { display: none; }
+
+      #loading { display: none; flex-direction: column; align-items: center; gap: 14px; z-index: 1; }
+      #overlay.loading #loading { display: flex; }
+      #loading .ring { display: none; }
+      #loading .txt { font-size: 14px; letter-spacing: 0.22em; color: var(--cyan); animation: blink 1s steps(2) infinite; }
+      @keyframes blink { 50% { opacity: 0.15; } }
+
+      /* ── PS1 translucent menu box ─────────────────────────────────────── */
+      .card {
+        position: relative; z-index: 1; width: 100%; max-width: 360px;
+        padding: 22px 22px 18px; text-align: left;
+        background: linear-gradient(180deg, var(--box-lt), var(--box));
+        border: 2px solid var(--edge);
+        box-shadow: inset 0 0 18px rgba(60,120,180,0.28), 0 10px 40px rgba(0,0,0,0.6);
+        backdrop-filter: blur(2px);
+      }
+      .card::before {   /* inner hairline bevel */
+        content: ''; position: absolute; inset: 3px; border: 1px solid rgba(120,180,230,0.18);
+        pointer-events: none;
+      }
+
+      h1 { margin: 0; text-align: center; font-weight: 700; font-size: 26px;
+           letter-spacing: 0.08em; color: #fff; text-shadow: 0 0 12px rgba(143,230,255,0.55), 0 2px 0 #0a2740; }
+      .tagline { margin: 6px 0 20px; text-align: center; font-size: 12px; font-weight: 500;
+                 letter-spacing: 0.26em; color: var(--leaf); text-transform: uppercase; }
+
+      .group { margin-bottom: 15px; }
+      .group-label { font-size: 11px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase;
+                     color: var(--cyan); margin: 0 0 8px; opacity: 0.85; }
+      .caption { margin: 6px 0 0; font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+      .divider { height: 1px; margin: 4px 0 16px; background: linear-gradient(90deg, transparent, var(--edge-d), transparent); }
+
+      /* graphics tier */
+      .seg { display: flex; gap: 6px; }
+      .tier {
+        flex: 1; padding: 9px 4px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+        letter-spacing: 0.08em; background: rgba(8,20,44,0.6); color: var(--dim);
+        border: 1px solid var(--edge-d); transition: all .12s ease;
+      }
+      .tier:hover { color: #fff; border-color: var(--edge); }
+      .tier.active { background: linear-gradient(180deg, #5fa9e6, #2f72b8); color: #fff;
+                     border-color: #bfe4ff; box-shadow: 0 0 12px rgba(95,169,230,0.55); }
+
+      /* menu items with ▸ cursor (FF7-style) */
+      .btn {
+        position: relative; width: 100%; text-align: left; cursor: pointer;
+        padding: 11px 14px 11px 30px; font: inherit; font-size: 15px; font-weight: 600;
+        letter-spacing: 0.06em; color: var(--text);
+        background: rgba(8,20,44,0.45); border: 1px solid transparent; transition: all .12s ease;
+      }
+      .btn::before {
+        content: '▸'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%) translateX(-3px);
+        color: var(--cyan); opacity: 0; transition: all .12s ease; font-size: 14px;
+      }
+      .btn:hover, .btn:focus-visible {
+        outline: none; color: #fff; border-color: var(--edge);
+        background: linear-gradient(90deg, rgba(70,140,210,0.35), rgba(70,140,210,0.08));
+        text-shadow: 0 0 8px rgba(143,230,255,0.5);
+      }
+      .btn:hover::before, .btn:focus-visible::before { opacity: 1; transform: translateY(-50%) translateX(0); }
+      .btn:active { transform: translateX(1px); }
+      .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+      .btn-primary { background: linear-gradient(180deg, rgba(95,169,230,0.5), rgba(47,114,184,0.3));
+                     border-color: var(--edge); }
+      .btn-ghost { background: transparent; color: var(--dim); }
+
+      .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 0; }
+
+      /* Mode = a switch you select (click doesn't boot); Begin starts it. */
+      .mode {
+        width: 100%; padding: 12px 6px; cursor: pointer; text-align: center;
+        font: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0.06em;
+        color: var(--dim); background: rgba(8,20,44,0.6); border: 1px solid var(--edge-d);
+        transition: all .12s ease;
+      }
+      .mode:hover { color: #fff; border-color: var(--edge); }
+      .mode.selected {
+        background: linear-gradient(180deg, #5fa9e6, #2f72b8); color: #fff;
+        border-color: #bfe4ff; box-shadow: 0 0 12px rgba(95,169,230,0.55);
+      }
+      .mode-wide { margin-top: 8px; }
+      .btn-start {
+        width: 100%; margin-top: 16px; padding: 13px; cursor: pointer;
+        font: inherit; font-size: 16px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--ink); background: linear-gradient(180deg, #ffe27a, #f3c645); border: 1px solid #fff3c0;
+        box-shadow: 0 0 14px rgba(244,200,74,0.5); transition: all .12s ease;
+      }
+      .btn-start:hover { background: linear-gradient(180deg, #fff0a8, #ffd866); box-shadow: 0 0 20px rgba(255,220,100,0.75); }
+      .btn-start:active { transform: translateY(1px); }
+      .btn-start:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+      .hint { margin: 12px 0 0; min-height: 16px; text-align: center; font-size: 12px;
+              letter-spacing: 0.1em; color: var(--cyan); }
+      .press { margin: 14px 0 2px; text-align: center; color: var(--cyan);
+               font-size: 12px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+               animation: blink 1.2s steps(2) infinite; }
+
+      /* ── In-scene HUD ─────────────────────────────────────────────── */
+      #hud { display: none; }
+      #back-hint {
+        position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+        font-family: 'Chakra Petch', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+        color: var(--cyan); text-transform: uppercase; pointer-events: none;
+        opacity: 0; transition: opacity 1s ease; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+      }
+      #back-hint kbd {
+        background: rgba(8,20,44,0.85); border: 1px solid var(--edge-d); padding: 1px 6px;
+        font: inherit; font-size: 11px; color: var(--text);
+      }
+      #back-hint.show { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"><span id="stats">initializing…</span></div>
+    <div id="back-hint"><kbd>Esc</kbd> or ✕ Exit to return</div>
+
+    <div id="overlay">
+      <div id="loading"><div class="ring"></div><div class="txt">NOW LOADING...</div></div>
+      <div class="card">
+        <h1>INFINITE FOREST</h1>
+        <p class="tagline">Procedural Woods · PS1 Render</p>
+
+        <div class="group">
+          <div class="group-label">Graphics</div>
+          <div class="seg" role="group" aria-label="Graphics quality">
+            <button class="tier" data-tier="low" type="button">Low</button>
+            <button class="tier" data-tier="medium" type="button">Medium</button>
+            <button class="tier" data-tier="high" type="button">High</button>
+          </div>
+          <p class="caption" id="tier-caption"></p>
+        </div>
+
+        <div class="group">
+          <div class="group-label">Forest</div>
+          <button id="open-settings" class="btn" type="button">Forest config</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="group" style="margin-bottom:0;">
+          <div class="group-label">Mode</div>
+          <div class="modes">
+            <button id="mode-free" class="mode" data-mode="free" type="button">Walk</button>
+            <button id="mode-demo" class="mode" data-mode="demo" type="button">Demo</button>
+          </div>
+          <button id="mode-inspect" class="mode mode-wide" data-mode="inspect" type="button">Inspect a tree</button>
+          <button id="mode-start" class="btn-start" type="button">Begin ▸</button>
+        </div>
+
+        <p class="hint" id="splash-hint"></p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

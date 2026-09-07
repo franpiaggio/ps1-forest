@@ -1,0 +1,18 @@
+Tree textures — extracted from the ez-tree library so we own editable copies.
+
+Source: @dgreenheck/ez-tree  (MIT, Copyright (c) 2024 Daniel Greenheck)
+        https://github.com/dgreenheck/ez-tree   ·  src/lib/assets/
+
+leaves/  — per-species leaf colour+alpha cutouts (ash, aspen, oak, pine)
+bark/    — per-species PBR bark sets (colour / normal / roughness / ao, 1k):
+           oak, pine, birch, willow.
+
+Original bark photo sources (per ez-tree's bark/README.md):
+  Birch  — https://www.texturecan.com/details/221/
+  Pine   — https://www.texturecan.com/details/588/
+  Oak    — https://polyhaven.com/a/bark_brown_02   (CC0)
+  Willow — https://polyhaven.com/a/bark_willow_02  (CC0)
+
+NOTE: these files are copies for editing/recolouring. By default the trees still
+render with the textures ez-tree embeds (base64) in its own bundle — wiring the
+materials to use THESE files is a separate step.

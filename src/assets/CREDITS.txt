@@ -1,0 +1,5 @@
+Grass blade alpha texture (grass-blades.jpeg) and perlin noise (perlin-noise.webp)
+are from the FluffyGrass project by Ebenezer — https://github.com/thebenezer/FluffyGrass
+Licensed MIT, Copyright (c) 2023 Ebenezer.
+The v07 grass technique (crossed alpha-textured planes, base->tip gradient, noise-driven
+wind/height/color) is adapted from that project.

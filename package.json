@@ -1,0 +1,39 @@
+{
+  "name": "ps1-forest",
+  "private": false,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
+    "gsap": "^3.15.0",
+    "lil-gui": "^0.20.0",
+    "nipplejs": "^1.0.4",
+    "postprocessing": "^6.39.1",
+    "three": "^0.170.0",
+    "three-good-godrays": "^0.12.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "description": "An endless procedural forest rendered through a PlayStation-1 lens: vertex snapping, 15-bit colour and a low-res buffer, in Three.js.",
+  "license": "MIT",
+  "homepage": "https://franpiaggio.github.io/ps1-forest/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/franpiaggio/ps1-forest.git"
+  },
+  "keywords": [
+    "threejs",
+    "webgl",
+    "ps1",
+    "retro",
+    "procedural",
+    "forest",
+    "shaders"
+  ]
+}
