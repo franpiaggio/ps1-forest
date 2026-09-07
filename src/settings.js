@@ -49,7 +49,7 @@ const SEASON_LIST = [
 
 export function buildSettings({ onReseed, onSeason } = {}) {
   const overlay = el('div',
-    'position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;' +
+    'position:fixed;inset:0;z-index:2100;display:none;align-items:center;justify-content:center;' +
     'background:rgba(8,11,14,0.92);backdrop-filter:blur(5px);padding:18px;' +
     'font-family:ui-monospace,Menlo,Consolas,monospace;');
 

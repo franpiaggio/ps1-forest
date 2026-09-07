@@ -458,6 +458,14 @@ function boot(preset, mode) {
   // On mobile: Randomize bottom-centre (not while a hunt is on — it would swap
   // the forest out from under the shot list), audio buttons bottom-right.
   const PHOTO = mode === 'photo';
+  // Demo is the sit-back mode: ambience and music come on by default there,
+  // and only there. The click that started it is the gesture audio needs.
+  // Done before the audio buttons are built so they paint the right state.
+  if (mode === 'demo') {
+    ambient.muted = false;
+    startAmbient();
+    startMusic();
+  }
   if (MOBILE) {
     if (!PHOTO) {
       const rb = makeHudBtn('Random', randomizeForest);
