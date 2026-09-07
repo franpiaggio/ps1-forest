@@ -290,7 +290,7 @@ export function buildPhotoHunt({
     const shot = shots[idx];
     taskN.textContent = String(idx + 1);
     taskV.textContent = shot ? describe(shot) : '';
-    taskS.textContent = SEASON_LABEL[SEASON_CYCLE[seasonIdx]];
+    taskS.textContent = `scene ${idx + 1}`;
     filmV.textContent = String(total);
   }
   paint();
@@ -462,9 +462,10 @@ export function buildPhotoHunt({
       seasonIdx = (seasonIdx + 1) % SEASON_CYCLE.length;
       onSeason?.(SEASON_CYCLE[seasonIdx]);
       seasonChime();
+      // The card never names the season — you step out into it and see.
       const done = idx >= shots.length;
-      seasonEl.querySelector('.big').textContent = SEASON_LABEL[SEASON_CYCLE[seasonIdx]].toUpperCase();
-      seasonEl.querySelector('.small').textContent = done ? 'a full year' : `shot ${idx + 1} of ${SHOTS}`;
+      seasonEl.querySelector('.big').textContent = done ? 'END OF ROLL' : 'NEXT SCENE';
+      seasonEl.querySelector('.small').textContent = done ? `${SHOTS} scenes` : `shot ${idx + 1} of ${SHOTS}`;
       seasonEl.classList.add('show');
       return;
     }
