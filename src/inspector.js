@@ -157,6 +157,19 @@ export function buildInspector(renderer, scene, camera, preset, { onReturnToMenu
   bar.append(sel, btnRegen, btnMenu);
   document.body.appendChild(bar);
 
+  // Credit where it's due: every tree in here is grown by ez-tree.
+  const credit = document.createElement('a');
+  credit.href = 'https://github.com/dgreenheck/ez-tree';
+  credit.target = '_blank';
+  credit.rel = 'noopener';
+  credit.textContent = 'trees grown with ez-tree by Daniel Greenheck';
+  credit.style.cssText =
+    'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;' +
+    'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;letter-spacing:0.04em;' +
+    'color:#cfd5dc;text-decoration:none;border-bottom:1px solid rgba(255,212,130,0.6);' +
+    'background:rgba(8,11,14,0.6);padding:6px 10px;border-radius:8px;backdrop-filter:blur(4px);';
+  document.body.appendChild(credit);
+
   const onEsc = (e) => { if (e.code === 'Escape') onReturnToMenu?.(); };
   window.addEventListener('keydown', onEsc);
 
@@ -185,6 +198,7 @@ export function buildInspector(renderer, scene, camera, preset, { onReturnToMenu
     ref.geometry.dispose();
     ref.material.dispose();
     bar.remove();
+    credit.remove();
   }
 
   return { dispose };
