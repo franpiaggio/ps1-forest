@@ -4,11 +4,7 @@ A photo hunt in an endless procedural forest, rendered like it's 1997.
 
 **[Play it →](https://franpiaggio.github.io/ps1-forest/)**
 
-You get a shot list and a roll of five frames. Five briefs — "a large oak, up close", "three aspens in one frame", "a giant" — one photo each. The fog hides everything past thirty metres, so you find your subject by walking, frame it in the viewfinder, and shoot. Every photo turns the season behind a cut to black, so a full roll walks you through a year. At the end you get a contact sheet of your five photos, scored and graded, that you can save.
-
-The forest itself is modern: trees grown procedurally with [ez-tree](https://github.com/dgreenheck/ez-tree), instanced foliage, a field of alpha-textured grass streamed as one instanced mesh, rolling terrain, four seasons, wind. Then the whole thing gets pushed through a PlayStation-1 pipeline — vertex snapping, 15-bit colour, a low-res buffer upscaled with nearest-neighbour — and the modern post-processing stack is thrown away.
-
-The goal was a *tasteful* PS1, not a parody of one. The console's look came from hardware limits, and copying every limit at once gives you something unreadable. So some of them are reproduced faithfully and some are deliberately softened; the notes below say which, and why.
+Eight frames, no brief. You walk, you frame, you shoot; the camera looks at what you framed and pays for what it finds. A close-up, the canopy, the sun through the trees, a grove of one species, one of the rare giants, leaves coming down. It pays less for something it has already seen on this roll, so the eight frames want to be eight different pictures. Every two photos the scene turns behind a cut to black. At the end you get a contact sheet, scored and graded, and you can save the sheet or any single photo.
 
 ## Running it
 
@@ -25,21 +21,22 @@ npm run dev      # http://localhost:5188
 
 **Mobile** — joystick bottom-left, drag the right half to look, optional gyroscope on top of that, big shutter button bottom-centre.
 
-Before you start, the splash screen picks a graphics tier (auto-detected from cores and memory) and **Forest config** opens a form for density, species mix, terrain and season, plus a dice button for a new world seed. The same seed always produces the same forest and the same shot list.
+Before you start, the splash screen picks a graphics tier (auto-detected from cores and memory) and **Forest config** opens a form for density, species mix, terrain and season, plus a dice button for a new world seed. The same seed always produces the same forest.
 
 ## How a photo is graded
 
-There's no image recognition and no hand-placed targets. The game already knows every tree the world streamed in — species, size, position, whether it's one of the rare giants — so when you press the shutter it projects each nearby tree onto the screen and scores the frame out of 1000:
+There's no image recognition and no hand-placed targets. The game already knows every tree the world streamed in — species, size, position, whether it's a giant — plus the camera's pitch, the angle to the sun and the current season. When you press the shutter it projects the nearby trees onto the screen and tags what it can see. Each tag pays, and the review card shows them with their points:
 
-- **Composition, up to 500.** The best tree in the box: how much of the frame it fills, how centred it is, whether a nearer trunk stands across it.
-- **The brief, up to 400.** A bonus, not a requirement. "An oak, up close" pays for the oak and again for getting close; "three aspens in one frame" pays per aspen and extra if they're spread across the frame rather than stacked; "a giant" pays for finding one at all.
-- **The scene, up to 100.** More species in one frame, a giant somewhere in it.
+- **A tree** — the base. How much of the frame the best tree fills, how it sits left to right, whether a nearer trunk stands across it.
+- **Distance and angle** — close-up, bark, the canopy, open sky, low angle, undergrowth.
+- **Light** — into the sun, light shafts.
+- **Depth and company** — the treeline, into the fog, a grove of one species, mixed woods, an ancient, understory.
+- **Weather** — falling leaves, snowfall, petals, depending on the scene.
+- **Placement** — rule of thirds, dead centre.
 
-Any photo with a tree in it counts and turns the season. Only an empty frame is refused, and it costs nothing. The chips on the review card say what the brief paid for and what it didn't; the grade runs D to S, and S means you got everything.
+A tag you've already earned on this roll pays 40%. Grades run D to S per photo, out of 1000. Only an empty frame is refused, and it costs nothing. After thirty seconds without a shot, a quiet nudge appears — *look up*, *face the light* — and rotates until you shoot.
 
-After forty seconds without a shot, a small compass points toward the nearest tree that fits the current brief. It's there so a run can't dead-end in a grove of the wrong species; it doesn't tell you how to frame it.
-
-The photo itself is the PS1 buffer read straight off the canvas, so it's a real 640×360 pixelated frame, not a re-render. `Walk` and `Demo` are still there for wandering without a list.
+The photo itself is the PS1 buffer read straight off the canvas, so it's a real 640×360 pixelated frame, not a re-render. `Walk` and `Demo` are still there for wandering without a camera.
 
 ## Everything underneath
 
@@ -51,7 +48,7 @@ The photo itself is the PS1 buffer read straight off the canvas, so it's a real 
 | `terrain.js` | A height field shared between JS and GLSL, so ground, trees, grass and player all agree on where the hills are. |
 | `seasons.js` | Per-leaf recolouring that preserves luminance, plus falling leaves, snow or petals. Pines stay green. |
 | `quality.js` | Three tiers (shadow map size, DPR, view distance, grass field radius, leaf reduction), auto-detected and overridable. |
-| `photo.js` | The photo hunt: shot list, framing score, film, season progression, HUD, end-of-roll contact sheet. |
+| `photo.js` | The camera: what it sees in a frame, the tag scoring, the scene turns, HUD, end-of-roll contact sheet and downloads. |
 | `demo.js` | The hands-off camera. |
 | `recorder.js` | `#record` clip capture. |
 

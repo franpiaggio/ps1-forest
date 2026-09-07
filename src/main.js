@@ -227,7 +227,7 @@ function revealWhenReady(readyPromise) {
 // One click boots. Hovering (or focusing) a mode previews its hint; leaving
 // falls back to the default mode's hint.
 const MODE_HINTS = {
-  photo:   'five shots · twelve frames of film · one year',
+  photo:   'eight frames · two per scene · take your photo',
   free:    MOBILE ? 'walk · joystick + drag to look' : 'walk · WASD + mouse · R rerolls the forest',
   demo:    'hands-off camera · sit back',
   inspect: 'one tree · orbit · swap presets',
@@ -508,14 +508,14 @@ function boot(preset, mode) {
   if (PHOTO) {
     hunt = buildPhotoHunt({
       camera, renderer, world, templates, mobile: MOBILE,
-      seed: chosenSeed,
+      sunDir: env.sunDir,
       startSeason: chosenSeason,
       renderDistance: preset.renderDistance,
       onSeason: (name) => { setSeason(name, { grass, env, particles: seasonFx }); ps1Exposure(); },
       onExit: (what) => {
         returnToMenu();
         if (what === 'again') {
-          chosenSeed = (Math.random() * 0x7fffffff) | 0;   // a fresh forest and a fresh list
+          chosenSeed = (Math.random() * 0x7fffffff) | 0;   // a fresh forest
           chooseMode('photo');
         }
       },
