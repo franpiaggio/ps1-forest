@@ -4,7 +4,7 @@ A photo hunt in an endless procedural forest, rendered like it's 1997.
 
 **[Play it →](https://franpiaggio.github.io/ps1-forest/)**
 
-You get a shot list and a roll of film. Five subjects — "a large oak, up close", "three aspens in one frame", "a giant" — and twelve exposures to get them. The fog hides everything past thirty metres, so you find your subject by walking, frame it in the viewfinder, and shoot. Every accepted photo turns the season, so a full roll walks you through a year. At the end you get a contact sheet of your five photos, graded, that you can save.
+You get a shot list and a roll of five frames. Five briefs — "a large oak, up close", "three aspens in one frame", "a giant" — one photo each. The fog hides everything past thirty metres, so you find your subject by walking, frame it in the viewfinder, and shoot. Every photo turns the season behind a cut to black, so a full roll walks you through a year. At the end you get a contact sheet of your five photos, scored and graded, that you can save.
 
 The forest itself is modern: trees grown procedurally with [ez-tree](https://github.com/dgreenheck/ez-tree), instanced foliage, a field of alpha-textured grass streamed as one instanced mesh, rolling terrain, four seasons, wind. Then the whole thing gets pushed through a PlayStation-1 pipeline — vertex snapping, 15-bit colour, a low-res buffer upscaled with nearest-neighbour — and the modern post-processing stack is thrown away.
 
@@ -29,31 +29,17 @@ Before you start, the splash screen picks a graphics tier (auto-detected from co
 
 ## How a photo is graded
 
-There's no image recognition and no hand-placed targets. The game already knows every tree the world streamed in — species, size, position, whether it's one of the rare giants — so when you press the shutter it projects each nearby tree's bounding sphere onto the screen and asks three questions: is it inside the viewfinder, how much of the frame does it fill, and is a nearer trunk standing across it. "Up close" wants the tree filling the frame; "from a distance" wants it out near the fog line; a group shot wants three of the species inside the box at once. The best matching tree sets the grade, C through S. If nothing matches, the message tells you why — not in frame, too far, blocked — and you've spent a frame of film.
+There's no image recognition and no hand-placed targets. The game already knows every tree the world streamed in — species, size, position, whether it's one of the rare giants — so when you press the shutter it projects each nearby tree onto the screen and scores the frame out of 1000:
 
-After forty seconds without a shot, a small compass points toward the nearest tree that fits the current subject. It's there so a run can't dead-end in a grove of the wrong species; it doesn't tell you how to frame it.
+- **Composition, up to 500.** The best tree in the box: how much of the frame it fills, how centred it is, whether a nearer trunk stands across it.
+- **The brief, up to 400.** A bonus, not a requirement. "An oak, up close" pays for the oak and again for getting close; "three aspens in one frame" pays per aspen and extra if they're spread across the frame rather than stacked; "a giant" pays for finding one at all.
+- **The scene, up to 100.** More species in one frame, a giant somewhere in it.
+
+Any photo with a tree in it counts and turns the season. Only an empty frame is refused, and it costs nothing. The chips on the review card say what the brief paid for and what it didn't; the grade runs D to S, and S means you got everything.
+
+After forty seconds without a shot, a small compass points toward the nearest tree that fits the current brief. It's there so a run can't dead-end in a grove of the wrong species; it doesn't tell you how to frame it.
 
 The photo itself is the PS1 buffer read straight off the canvas, so it's a real 640×360 pixelated frame, not a re-render. `Walk` and `Demo` are still there for wandering without a list.
-
-**Demo** is a hands-off camera: four looping GSAP timelines layer a meandering heading, a slow speed inhale/exhale, a buoyant bob with the occasional crane shot above the canopy, and a gaze that pans independently of travel. It's the mode to leave running on a second monitor.
-
-Adding `#record` to the URL captures the canvas plus live audio to a `.webm` — `#record?w=1080&h=1920&secs=30` for a vertical clip.
-
-## How the PS1 look is built
-
-Everything lives in [`src/ps1.js`](src/ps1.js), about a hundred lines.
-
-**Vertex snapping.** The PS1's GTE had no sub-pixel vertex precision, so vertices landed on whole pixels and geometry visibly wobbled as the camera moved. `applyVertexSnap` chains onto a material's `onBeforeCompile` and rounds clip-space XY to the internal buffer's pixel grid. The one non-obvious part: vertices at or behind the near plane (`w <= 0`) blow up under the perspective divide and stretch triangles across the screen, so those are left alone. Leaves opt out of snapping entirely — snapping dense alpha cards makes them flicker rather than wobble.
-
-**Low internal resolution.** The scene renders into a ~360px-tall buffer that CSS upscales with nearest-neighbour. That's also what drives the snap grid, so the wobble scales with the pixelation instead of fighting it.
-
-**Nearest textures, but keep mipmaps.** Nearest magnification gives the chunky texels up close. True PS1 hardware had no mipmaps at all, but our source textures are high-res, and minifying them without mips makes distant foliage shimmer in a way that reads as a bug, not as retro. So: nearest magnification, mipmapped minification.
-
-**15-bit colour with an ordered dither.** The console output 5 bits per channel and dithered to hide the banding. A 4×4 Bayer matrix at one quantisation step of amplitude gives the signature grain without turning flat surfaces into noise.
-
-**What was removed.** Godrays, bloom, depth of field, SMAA and chromatic aberration are all switched off, and tone mapping drops to linear with lowered exposure. They're beautiful and they're from the wrong decade.
-
-**What was skipped on purpose.** Affine texture warping — the swimming-texture artifact everyone associates with the console — is the most conspicuous PS1 tell, and WebGL can't produce true non-perspective varyings cleanly. The snapping plus the low resolution already gives enough swim.
 
 ## Everything underneath
 

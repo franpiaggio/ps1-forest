@@ -15,14 +15,13 @@ import { terrainHeight } from './terrain.js';
 import { CONFIG } from './chunk.js';
 
 const SHOTS = 5;
-const FILM = 12;
+const FILM = 5;                      // one frame per brief — every shot counts
 const SEASON_CYCLE = ['verano', 'otono', 'invierno', 'primavera'];
 const SEASON_LABEL = { verano: 'Summer', otono: 'Autumn', invierno: 'Winter', primavera: 'Spring' };
 const SPECIES_NAME = { oak: 'oak', ash: 'ash', aspen: 'aspen', pine: 'pine' };
 const SIZE_NAME = { l: 'large', m: 'medium', s: 'small' };
 const VIEW = 0.72;                   // half-extent of the viewfinder box in NDC
 const HINT_AFTER = 40;               // seconds without a shot before the compass shows
-const POINTS = { S: 300, A: 200, B: 120, C: 60 };
 
 function mulberry32(seed) {
   let s = seed >>> 0;
@@ -72,7 +71,7 @@ function buildShotList(seed, templates) {
 function describe(shot) {
   if (shot.giant) return 'a giant';
   const sp = shot.species ? SPECIES_NAME[shot.species] : null;
-  if (shot.count) return `${['', 'one', 'two', 'three', 'four'][shot.count]} ${sp === 'ash' ? 'ashes' : sp + 's'} in one frame`;
+  if (shot.count) return `${['', 'one', 'two', 'three', 'four'][shot.count]} ${plural(sp)} in one frame`;
   const size = shot.size ? SIZE_NAME[shot.size] + ' ' : '';
   const noun = sp ? `${size}${sp}` : (size ? `${size}tree` : null);
   const subject = noun ? `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}` : 'any tree';
@@ -90,31 +89,24 @@ function matches(shot, tree, tpl) {
   return true;
 }
 
-// Size score from the projected radius (in half-viewport-heights). Plateau of 1
-// between lo..hi, linear falloff to 0 at lo0 / hi0.
+// Plateau of 1 between lo..hi, linear falloff to 0 at lo0 / hi0. Fed the
+// projected radius in half-viewport-heights.
 function band(r, lo0, lo, hi, hi0) {
   if (r <= lo0 || r >= hi0) return 0;
   if (r < lo) return (r - lo0) / (lo - lo0);
   if (r > hi) return (hi0 - r) / (hi0 - hi);
   return 1;
 }
-// Bands on projected radius (close, any, giant) or on distance as a fraction of
-// the fog distance (wide) — "from a distance" has to mean the same thing on a
-// tier whose fog sits at 18 m as on one where it sits at 28 m.
-const BANDS = {
-  close: [0.25, 0.55, 1.20, 2.00],
-  any:   [0.06, 0.15, 1.20, 2.00],
-  giant: [0.30, 0.80, 4.00, 6.00],
-};
-const WIDE_BAND = [0.30, 0.50, 1.05, 1.30];
 
-function rate(score) {
-  if (score >= 0.85) return 'S';
-  if (score >= 0.65) return 'A';
-  if (score >= 0.45) return 'B';
-  if (score >= 0.28) return 'C';
-  return null;
+// Grade from points (0–1000 per photo).
+function grade(pts) {
+  if (pts >= 880) return 'S';
+  if (pts >= 720) return 'A';
+  if (pts >= 520) return 'B';
+  if (pts >= 300) return 'C';
+  return 'D';
 }
+function plural(sp) { return sp === 'ash' ? 'ashes' : `${SPECIES_NAME[sp]}s`; }
 
 // ── Shutter sound — synthesised, no sample ───────────────────────────────────
 let actx = null;
@@ -133,13 +125,31 @@ function shutterSound() {
   } catch (_) { /* no audio, no problem */ }
 }
 
+// Two soft notes when the season turns.
+function seasonChime() {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = actx.currentTime;
+    const note = (t, f, dur) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+    };
+    note(t0, 523.25, 0.5); note(t0 + 0.18, 783.99, 0.7);
+  } catch (_) { /* silent */ }
+}
+
 // ── The mode ─────────────────────────────────────────────────────────────────
 export function buildPhotoHunt({
   camera, renderer, world, templates, seed, mobile,
   startSeason = 'verano', onSeason, onExit, renderDistance = 28,
 }) {
   const shots = buildShotList(seed, templates);
-  const album = [];                    // { url, shot, grade, score }
+  const album = [];                    // { url, shot, grade, pts, notes, season }
+  let total = 0;
+  let trans = null;                    // season transition in flight: { t0, switched }
   let idx = 0;
   let film = FILM;
   let seasonIdx = Math.max(0, SEASON_CYCLE.indexOf(startSeason));
@@ -171,6 +181,19 @@ export function buildPhotoHunt({
     .ph-task .k { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #8fe6ff; opacity: .85; }
     .ph-task .v { font-size: 17px; font-weight: 600; margin-top: 2px; line-height: 1.2; }
     .ph-task .s { margin-top: 8px; font-size: 11px; letter-spacing: .12em; color: #93b2cc; text-transform: uppercase; }
+    .ph-fade { position: fixed; inset: 0; z-index: 34; background: #06120f; opacity: 0; pointer-events: none; }
+    .ph-season { position: fixed; inset: 0; z-index: 35; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                 gap: 6px; opacity: 0; transition: opacity .25s ease; pointer-events: none; }
+    .ph-season.show { opacity: 1; }
+    .ph-season .big { font-size: 34px; font-weight: 700; letter-spacing: .32em; text-indent: .32em; color: #fff;
+                      text-shadow: 0 0 18px rgba(143,230,255,.6), 0 2px 0 #0a2740; }
+    .ph-season .small { font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: #9ad27a; }
+    .ph-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .ph-chip { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px;
+               border: 1px solid #2b5e93; color: #93b2cc; background: rgba(8,20,44,0.6); }
+    .ph-chip.hit { color: #9ad27a; border-color: #4f8a3a; }
+    .ph-chip.miss { color: #c98a8a; border-color: #7a3a3a; }
+    .ph-pts { font-size: 12px; color: #ffd866; margin-left: 8px; }
     .ph-film { position: fixed; top: 64px; right: 12px; z-index: 31; padding: 8px 12px; text-align: right; }
     .ph-film .k { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #8fe6ff; opacity: .85; }
     .ph-film .v { font-size: 22px; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
@@ -194,7 +217,7 @@ export function buildPhotoHunt({
     .ph-review .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; }
     .ph-review .cap { font-size: 12px; color: #93b2cc; }
     .ph-grade { font-size: 26px; font-weight: 700; line-height: 1; text-shadow: 0 0 10px rgba(143,230,255,.5); }
-    .ph-grade.S { color: #ffd866; } .ph-grade.A { color: #9ad27a; } .ph-grade.B { color: #8fe6ff; } .ph-grade.C { color: #cfd5dc; }
+    .ph-grade.S { color: #ffd866; } .ph-grade.A { color: #9ad27a; } .ph-grade.B { color: #8fe6ff; } .ph-grade.C { color: #cfd5dc; } .ph-grade.D { color: #8a97a5; }
     .ph-shutter { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 33; width: 74px; height: 74px;
                   border-radius: 50%; border: 3px solid #eaf3ff; background: rgba(255,212,130,0.92); cursor: pointer;
                   box-shadow: 0 0 0 4px rgba(12,30,64,0.7), 0 6px 18px rgba(0,0,0,.6); }
@@ -229,10 +252,12 @@ export function buildPhotoHunt({
     <div class="ph-flash"></div>
     <div class="ph-vf"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><i class="dot"></i></div>
     <div class="ph-box ph-task"><div class="k">Shot <span class="n"></span> of ${SHOTS}</div><div class="v"></div><div class="s"></div></div>
-    <div class="ph-box ph-film"><div class="k">Film</div><div class="v"></div></div>
+    <div class="ph-box ph-film"><div class="k">Score</div><div class="v"></div></div>
+    <div class="ph-fade"></div>
+    <div class="ph-season"><div class="big"></div><div class="small"></div></div>
     <div class="ph-box ph-compass"></div>
     <div class="ph-box ph-msg"></div>
-    <div class="ph-box ph-review"><img alt=""><div class="row"><span class="cap"></span><span class="ph-grade"></span></div></div>
+    <div class="ph-box ph-review"><img alt=""><div class="row"><span class="cap"></span><span><span class="ph-pts"></span> <span class="ph-grade"></span></span></div><div class="ph-chips"></div></div>
     <div class="ph-hint"></div>
   `;
   document.body.appendChild(root);
@@ -241,8 +266,9 @@ export function buildPhotoHunt({
   const taskN = root.querySelector('.ph-task .n');
   const taskV = root.querySelector('.ph-task .v');
   const taskS = root.querySelector('.ph-task .s');
-  const filmBox = root.querySelector('.ph-film');
   const filmV = root.querySelector('.ph-film .v');
+  const fadeEl = root.querySelector('.ph-fade');
+  const seasonEl = root.querySelector('.ph-season');
   const compass = root.querySelector('.ph-compass');
   const msg = root.querySelector('.ph-msg');
   const review = root.querySelector('.ph-review');
@@ -265,8 +291,7 @@ export function buildPhotoHunt({
     taskN.textContent = String(idx + 1);
     taskV.textContent = shot ? describe(shot) : '';
     taskS.textContent = SEASON_LABEL[SEASON_CYCLE[seasonIdx]];
-    filmV.textContent = String(film).padStart(2, '0');
-    filmBox.classList.toggle('low', film <= 3);
+    filmV.textContent = String(total);
   }
   paint();
 
@@ -301,67 +326,97 @@ export function buildPhotoHunt({
     return { tree, tpl, x: _v.x, y: _v.y, r, tw, dist, h };
   }
 
+  // Every photo with a tree in it counts. Composition earns up to 500, the
+  // brief up to 400 as a bonus, the scene up to 100. Nothing here can fail
+  // except an empty frame.
   function evaluate(shot) {
     const near = world.getNearbyTrees(camera.position.x, camera.position.z, 60);
-    const inFrame = [];
-    const all = [];
+    const all = [], inFrame = [];
     for (const t of near) {
       const p = project(t);
-      if (!p) continue;
+      if (!p || p.dist < 1.0) continue;
       all.push(p);
-      if (Math.abs(p.x) <= VIEW && Math.abs(p.y) <= VIEW && p.dist >= 1.2) inFrame.push(p);
+      // In frame = the trunk column is inside the box horizontally and the
+      // tree's vertical span overlaps it. A tall tree right in front of you
+      // has its centre above the box; it's still very much in the picture.
+      const top = p.y + p.r, bottom = p.y - p.r;
+      p.inBox = Math.abs(p.x) <= VIEW + p.tw && top >= -VIEW && bottom <= VIEW;
+      if (p.inBox) inFrame.push(p);
     }
-    const subjects = inFrame.filter(p => matches(shot, p.tree, p.tpl));
+    if (!inFrame.length) return { ok: false, reason: 'nothing in frame' };
 
-    if (shot.count) {
-      if (subjects.length < shot.count) {
-        const anyNear = all.some(p => matches(shot, p.tree, p.tpl));
-        const plural = shot.species === 'ash' ? 'ashes' : `${SPECIES_NAME[shot.species]}s`;
-        return { ok: false, reason: subjects.length ? `only ${subjects.length} in frame` : (anyNear ? 'not in frame' : `no ${plural} here`) };
-      }
-      // Group shot: grade on how much of the box the group fills + how centred
-      // the group's centre is. Take the `count` largest.
-      subjects.sort((a, b) => b.r - a.r);
-      const g = subjects.slice(0, shot.count);
-      const cx = g.reduce((s, p) => s + p.x, 0) / g.length;
-      const cy = g.reduce((s, p) => s + p.y, 0) / g.length;
-      const spread = Math.max(...g.map(p => Math.hypot(p.x - cx, p.y - cy)));
-      const size = band(g[0].r, 0.08, 0.2, 0.9, 1.6);
-      const centre = 1 - Math.min(1, Math.hypot(cx, cy) / VIEW) * 0.5;
-      const layout = spread < 0.05 ? 0.6 : 1;            // stacked behind each other reads as one tree
-      const score = size * centre * layout;
-      return { ok: !!rate(score), score, grade: rate(score), reason: 'too far' };
-    }
-
-    if (!subjects.length) {
-      const anyNear = all.some(p => matches(shot, p.tree, p.tpl));
-      return { ok: false, reason: anyNear ? 'not in frame' : 'no subject here' };
-    }
-    let best = null;
-    for (const p of subjects) {
-      const wide = shot.framing === 'wide';
-      const bands = BANDS[shot.giant ? 'giant' : (shot.framing === 'close' ? 'close' : 'any')];
-      const size = wide
-        ? band(p.dist / renderDistance, ...WIDE_BAND) * (p.r >= 0.05 ? 1 : 0)
-        : band(p.r, ...bands);
-      const centre = 1 - Math.max(Math.abs(p.x), Math.abs(p.y)) / VIEW * 0.5;
-      // Occlusion: a nearer trunk standing across this tree's centre line. Only
-      // trunks count — canopies are lacy and shooting through them is fair game.
+    const clearOf = (p) => {
       let clear = 1;
       for (const o of all) {
         if (o === p || o.dist >= p.dist - 0.8) continue;
-        const acrossX = Math.abs(o.x - p.x) < o.tw * 2.2;
-        const acrossY = Math.abs(o.y - p.y) < o.r;
-        if (acrossX && acrossY) clear *= 0.7;
+        if (Math.abs(o.x - p.x) < o.tw * 2.2 && Math.abs(o.y - p.y) < o.r) clear *= 0.7;
       }
-      const score = size * centre * Math.max(0.45, clear);
-      const why = size === 0
-        ? ((wide ? p.dist / renderDistance < WIDE_BAND[1] : p.r < bands[1]) ? (wide ? 'too close' : 'too far') : (wide ? 'too far' : 'too close'))
-        : (clear < 0.7 ? 'blocked' : null);
-      if (!best || score > best.score) best = { p, score, why };
+      return Math.max(0.4, clear);
+    };
+    const compose = (p) => {
+      const sizeFit = band(p.r, 0.05, 0.18, 1.8, 3.4);
+      const overlap = Math.min(p.y + p.r, VIEW) - Math.max(p.y - p.r, -VIEW);
+      const presence = Math.max(0, Math.min(1, overlap / (2 * VIEW)));
+      const centre = 1 - Math.min(1, Math.abs(p.x) / VIEW) * 0.6;
+      return (0.7 * sizeFit * centre + 0.3 * presence) * clearOf(p);
+    };
+    for (const p of inFrame) p.comp = compose(p);
+
+    // Brief bonus. The hero is the tree the brief asked for if one is in
+    // frame, otherwise the best-composed tree.
+    const notes = [];
+    let brief = 0;
+    let hero = inFrame.reduce((a, b) => (b.comp > a.comp ? b : a));
+    if (shot.count) {
+      const subj = inFrame.filter(p => matches(shot, p.tree, p.tpl)).sort((a, b) => b.comp - a.comp);
+      const n = Math.min(subj.length, shot.count);
+      notes.push({ label: `${n}/${shot.count} ${plural(shot.species)}`, hit: n >= shot.count });
+      brief += 300 * (n / shot.count);
+      if (n >= shot.count) {
+        const g = subj.slice(0, shot.count);
+        const cx = g.reduce((a, p) => a + p.x, 0) / g.length;
+        const spread = Math.max(...g.map(p => Math.abs(p.x - cx)));
+        const spaced = spread > 0.12;
+        notes.push({ label: spaced ? 'spread out' : 'bunched', hit: spaced });
+        if (spaced) brief += 100;
+        hero = g[0];
+      }
+    } else {
+      const subj = inFrame.filter(p => matches(shot, p.tree, p.tpl)).sort((a, b) => b.comp - a.comp)[0];
+      const what = shot.giant ? 'giant' : (shot.species ? SPECIES_NAME[shot.species] : 'tree');
+      if (shot.size) notes.push({ label: `${SIZE_NAME[shot.size]} ${what}`, hit: !!subj });
+      else notes.push({ label: what, hit: !!subj });
+      if (subj) {
+        hero = subj;
+        brief += shot.giant ? 250 : 150;
+        if (shot.framing === 'close') {
+          const hit = subj.r >= 0.6;
+          notes.push({ label: 'up close', hit });
+          brief += hit ? 150 : Math.round(150 * Math.min(1, subj.r / 0.6) * 0.3);
+        } else if (shot.framing === 'wide') {
+          const f = subj.dist / renderDistance;
+          const hit = f >= 0.45 && subj.r >= 0.05;
+          notes.push({ label: 'from a distance', hit });
+          brief += hit ? 150 : Math.round(150 * Math.min(1, f / 0.45) * 0.3);
+        } else if (shot.giant) {
+          const hit = subj.r <= 4.0;
+          notes.push({ label: 'whole', hit });
+          brief += hit ? 150 : 50;
+        } else {
+          brief += 150;                                    // no framing asked — species alone earns it
+        }
+      }
     }
-    const grade = rate(best.score);
-    return { ok: !!grade, score: best.score, grade, reason: best.why || 'weak framing' };
+
+    // Scene bonus: variety and rarities in the frame.
+    const species = new Set(inFrame.map(p => p.tpl.id.split('-')[0]));
+    let scene = Math.min(75, (species.size - 1) * 25);
+    if (inFrame.some(p => p.tree.giant)) scene += 25;
+    if (species.size > 1) notes.push({ label: `${species.size} species`, hit: true });
+
+    const comp = Math.round(500 * hero.comp);
+    const pts = Math.max(0, Math.min(1000, comp + Math.round(brief) + scene));
+    return { ok: true, pts, grade: grade(pts), notes, hero };
   }
 
   // ── Shooting ──
@@ -374,45 +429,66 @@ export function buildPhotoHunt({
   function capture() {
     if (!wantsCapture) return;
     wantsCapture = false;
-    film--;
-    lastShotAt = performance.now();
-    compass.classList.remove('show');
+    const shot = shots[idx];
+    const result = evaluate(shot);
     shutterSound();
     flashT = 0.3;
     hint.style.opacity = '0';          // you've found the shutter; the hint's done its job
-    paint();
+    lastShotAt = performance.now();
+    compass.classList.remove('show');
+    if (!result.ok) { flashMsg(result.reason); return; }   // an empty frame costs nothing
 
-    const shot = shots[idx];
-    const result = evaluate(shot);
+    film--;
     let url = null;
     try { url = renderer.domElement.toDataURL('image/png'); } catch (_) { /* tainted canvas, no thumb */ }
-
-    if (result.ok) {
-      album.push({ url, shot, grade: result.grade, score: result.score, season: SEASON_CYCLE[seasonIdx] });
-      busy = true;
-      showReview(url, describe(shot), result.grade);
-      setTimeout(() => {
-        review.classList.remove('show');
-        idx++;
-        seasonIdx = (seasonIdx + 1) % SEASON_CYCLE.length;
-        onSeason?.(SEASON_CYCLE[seasonIdx]);
-        busy = false;
-        if (idx >= shots.length) finish('done');
-        else if (film <= 0) finish('film');
-        else paint();
-      }, 1700);
-    } else {
-      flashMsg(result.reason);
-      if (film <= 0) setTimeout(() => finish('film'), 900);
-    }
+    total += result.pts;
+    album.push({ url, shot, grade: result.grade, pts: result.pts, notes: result.notes, season: SEASON_CYCLE[seasonIdx] });
+    paint();
+    busy = true;
+    showReview(url, describe(shot), result);
+    setTimeout(() => { review.classList.remove('show'); trans = { t0: performance.now(), switched: false }; }, 1900);
   }
 
-  function showReview(url, cap, grade) {
+  // The season turns behind a cut to black, PS1 style: fade out, swap the
+  // palette while nothing is visible, hold a title card, fade back in.
+  // Driven off the wall clock in update() so it paces the same at any fps.
+  function tickTransition(now) {
+    const e = (now - trans.t0) / 1000;
+    if (e < 0.4) { fadeEl.style.opacity = String(e / 0.4); return; }
+    if (!trans.switched) {
+      trans.switched = true;
+      fadeEl.style.opacity = '1';
+      idx++;
+      seasonIdx = (seasonIdx + 1) % SEASON_CYCLE.length;
+      onSeason?.(SEASON_CYCLE[seasonIdx]);
+      seasonChime();
+      const done = idx >= shots.length;
+      seasonEl.querySelector('.big').textContent = SEASON_LABEL[SEASON_CYCLE[seasonIdx]].toUpperCase();
+      seasonEl.querySelector('.small').textContent = done ? 'a full year' : `shot ${idx + 1} of ${SHOTS}`;
+      seasonEl.classList.add('show');
+      return;
+    }
+    if (e < 1.6) return;                                   // hold the card
+    seasonEl.classList.remove('show');                     // every step past here is idempotent —
+    if (e < 1.9) return;                                   // frames can be sparse, nothing may be skipped
+    if (e < 2.5) { fadeEl.style.opacity = String(1 - (e - 1.9) / 0.6); return; }
+    seasonEl.classList.remove('show');
+    fadeEl.style.opacity = '0';
+    trans = null;
+    busy = false;
+    if (idx >= shots.length) finish('done');
+    else paint();
+  }
+
+  function showReview(url, cap, result) {
     const img = review.querySelector('img');
     if (url) img.src = url; else img.removeAttribute('src');
     review.querySelector('.cap').textContent = cap;
+    review.querySelector('.ph-pts').textContent = `+${result.pts}`;
     const g = review.querySelector('.ph-grade');
-    g.textContent = grade; g.className = 'ph-grade ' + grade;
+    g.textContent = result.grade; g.className = 'ph-grade ' + result.grade;
+    review.querySelector('.ph-chips').innerHTML = result.notes
+      .map(n => `<span class="ph-chip ${n.hit ? 'hit' : 'miss'}">${n.label}</span>`).join('');
     review.classList.add('show');
   }
 
@@ -443,7 +519,6 @@ export function buildPhotoHunt({
     if (finished) return;
     finished = true;
     elapsed = (performance.now() - startedAt) / 1000;
-    const total = album.reduce((s, a) => s + POINTS[a.grade], 0);
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const ss = String(Math.floor(elapsed % 60)).padStart(2, '0');
     try { document.exitPointerLock?.(); } catch (_) { /* ignore */ }
@@ -453,12 +528,12 @@ export function buildPhotoHunt({
     const cells = shots.map((s, i) => {
       const a = album[i];
       if (!a) return `<div class="p miss">${describe(s)}</div>`;
-      return `<div class="p"><img src="${a.url || ''}" alt=""><div class="row"><span class="cap">${describe(s)}<br>${SEASON_LABEL[a.season]}</span><span class="ph-grade ${a.grade}">${a.grade}</span></div></div>`;
+      return `<div class="p"><img src="${a.url || ''}" alt=""><div class="row"><span class="cap">${describe(s)}<br>${SEASON_LABEL[a.season]} · ${a.pts} pts</span><span class="ph-grade ${a.grade}">${a.grade}</span></div></div>`;
     }).join('');
     endEl.innerHTML = `
       <div class="ph-box card">
-        <h2>${why === 'done' ? 'ROLL COMPLETE' : 'OUT OF FILM'}</h2>
-        <div class="sub">${album.length} of ${SHOTS} shots · ${mm}:${ss}</div>
+        <h2>ROLL COMPLETE</h2>
+        <div class="sub">${album.length} photos · ${mm}:${ss} · ${grade(total / Math.max(1, album.length))} roll</div>
         <div class="grid">${cells}</div>
         <div class="tot"><span>Score</span><b>${total}</b></div>
         <div class="btns">
@@ -494,10 +569,10 @@ export function buildPhotoHunt({
         g.strokeStyle = '#6fb6e8'; g.lineWidth = 2; g.strokeRect(x - 1, y - 1, w + 2, h + 2);
         g.fillStyle = '#93b2cc'; g.fillText(describe(a.shot), x, y + h + 22);
         g.fillStyle = a.grade === 'S' ? '#ffd866' : '#8fe6ff'; g.textAlign = 'right';
-        g.fillText(a.grade, x + w, y + h + 22); g.textAlign = 'left';
+        g.fillText(`${a.pts} · ${a.grade}`, x + w, y + h + 22); g.textAlign = 'left';
       });
       g.fillStyle = '#8fe6ff'; g.font = '600 13px "Chakra Petch", monospace';
-      g.fillText('PS1 FOREST · PHOTO HUNT', pad, c.height - 14);
+      g.fillText(`PS1 FOREST · PHOTO HUNT · ${total} PTS`, pad, c.height - 14);
       const a = document.createElement('a');
       a.href = c.toDataURL('image/png');
       a.download = 'ps1-forest-album.png';
@@ -520,6 +595,7 @@ export function buildPhotoHunt({
     if (flashT > 0) { flashT -= dt; flashEl.style.opacity = String(Math.max(0, flashT / 0.3) * 0.9); }
     if (finished) return;
     const now = performance.now();
+    if (trans) { tickTransition(now); return; }
     if (now - lastCompassAt > 1000) { lastCompassAt = now; updateCompass(); }   // once a second
   }
 
