@@ -30,7 +30,7 @@
 
       /* ── Foggy-forest backdrop + treeline silhouette + soft scanlines ── */
       #overlay {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
         padding: 20px; user-select: none; transition: opacity .22s ease;
         background:
           radial-gradient(90% 70% at 50% 28%, rgba(150,190,170,0.16), transparent 60%),
@@ -134,6 +134,9 @@
         border-color: #bfe4ff; box-shadow: 0 0 12px rgba(95,169,230,0.55);
       }
       .mode-wide { margin-top: 8px; }
+      .mode-game { margin: 0 0 8px; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px; }
+      .mode-game .t { font-size: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+      .mode-game .d { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; opacity: 0.8; }
       .btn-start {
         width: 100%; margin-top: 16px; padding: 13px; cursor: pointer;
         font: inherit; font-size: 16px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
@@ -195,6 +198,9 @@
 
         <div class="group" style="margin-bottom:0;">
           <div class="group-label">Mode</div>
+          <button id="mode-photo" class="mode mode-wide mode-game" data-mode="photo" type="button">
+            <span class="t">Photo hunt</span><span class="d">find it in the fog · frame it · shoot</span>
+          </button>
           <div class="modes">
             <button id="mode-free" class="mode" data-mode="free" type="button">Walk</button>
             <button id="mode-demo" class="mode" data-mode="demo" type="button">Demo</button>

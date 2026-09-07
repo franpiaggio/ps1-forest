@@ -25,6 +25,7 @@ import { buildSettings }        from './settings.js';
 import { applySeasonToLeaf, setSeason, buildSeasonParticles } from './seasons.js';
 import { applyVertexSnap, makeNearest, ps1Uniforms } from './ps1.js';
 import { buildSunShafts } from './lightshafts.js';
+import { buildPhotoHunt } from './photo.js';
 
 // PS1 internal resolution — the scene renders into a small buffer that CSS
 // upscales nearest-neighbour. Lower = chunkier; tasteful PS1 sits ~280–340.
@@ -146,9 +147,10 @@ const overlay   = document.getElementById('overlay');
 const btnFree   = document.getElementById('mode-free');
 const btnDemo   = document.getElementById('mode-demo');
 const btnInspect = document.getElementById('mode-inspect');
+const btnPhoto  = document.getElementById('mode-photo');
 const btnStart  = document.getElementById('mode-start');
-const modeBtns  = [btnFree, btnDemo, btnInspect].filter(Boolean);
-let selectedMode = 'free';   // Walk pre-selected
+const modeBtns  = [btnPhoto, btnFree, btnDemo, btnInspect].filter(Boolean);
+let selectedMode = 'photo';   // the game is the default
 const btnSettings = document.getElementById('open-settings');
 
 // Pre-start forest settings (same panel on desktop & mobile). Edits CONFIG live;
@@ -192,12 +194,6 @@ for (const btn of tierBtns) {
   });
 }
 
-// On mobile "Walk" is driven by on-screen touch controls (joystick + drag look
-// + toggleable gyro), so it's available there too.
-if (MOBILE && splashHint) {
-  splashHint.textContent = 'walk · joystick + drag to look';
-}
-
 // Record mode: pre-select High and turn "Demo" into the capture trigger. Clicking
 // it is the user gesture audio/recording need; boot() runs the automated capture.
 if (RECORD) {
@@ -230,9 +226,16 @@ function revealWhenReady(readyPromise) {
 }
 // Mode buttons are a SWITCH: clicking one only selects it (highlights), it doesn't
 // boot. The Begin button starts whichever mode is selected.
+const MODE_HINTS = {
+  photo:   'five shots · twelve frames of film · one year',
+  free:    MOBILE ? 'walk · joystick + drag to look' : 'walk · WASD + mouse · R rerolls the forest',
+  demo:    'hands-off camera · sit back',
+  inspect: 'one tree · orbit · swap presets',
+};
 function selectMode(mode) {
   selectedMode = mode;
   for (const b of modeBtns) b.classList.toggle('selected', b.dataset.mode === mode);
+  if (splashHint && !RECORD) splashHint.textContent = MODE_HINTS[mode] ?? '';
 }
 for (const b of modeBtns) b.addEventListener('click', () => selectMode(b.dataset.mode));
 selectMode(selectedMode);   // Walk pre-selected
@@ -259,12 +262,14 @@ function returnToMenu() {
 // ── Boot ────────────────────────────────────────────────────────────────────
 function boot(preset, mode) {
   preset = ps1Preset(preset);             // PS1: no godrays/bloom/DoF/SMAA
-  if (MOBILE) {
+  if (MOBILE && mode !== 'photo') {
     backHint.innerHTML = mode === 'free'
       ? 'joystick to move · drag to look · ✕ Exit to leave'
       : 'tilt phone to look · 🧭 toggles gyro · ✕ Exit to leave';
   } else if (mode === 'free') {
     backHint.innerHTML = 'WASD move · Shift run · arrows look · <kbd>Esc</kbd> for menu';
+  } else if (mode === 'photo') {
+    backHint.innerHTML = '';           // the hunt HUD carries its own hint
   }
 
   const renderer = new THREE.WebGLRenderer({
@@ -446,12 +451,16 @@ function boot(preset, mode) {
     b.addEventListener('click', onClick);
     return b;
   };
-  // On mobile: Randomize bottom-centre, audio buttons bottom-right.
+  // On mobile: Randomize bottom-centre (not while a hunt is on — it would swap
+  // the forest out from under the shot list), audio buttons bottom-right.
+  const PHOTO = mode === 'photo';
   if (MOBILE) {
-    const rb = makeHudBtn('Random', randomizeForest);
-    rb.style.cssText += 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:42;';
-    document.body.appendChild(rb);
-    activeCleanups.push(() => rb.remove());
+    if (!PHOTO) {
+      const rb = makeHudBtn('Random', randomizeForest);
+      rb.style.cssText += 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:42;';
+      document.body.appendChild(rb);
+      activeCleanups.push(() => rb.remove());
+    }
     activeCleanups.push(addAudioButtons());
   }
 
@@ -459,10 +468,11 @@ function boot(preset, mode) {
   // { update(dt, world), isAuto }.
   let explorer;
   let mobileHud = null;
-  if (mode === 'free' && MOBILE) {
+  const WALKS = mode === 'free' || PHOTO;
+  if (WALKS && MOBILE) {
     // Touch walk: joystick + drag look + toggleable gyro + its own Exit button.
     explorer = buildMobilePlayer(camera, scene, { onExit: () => returnToMenu() });
-  } else if (mode === 'free') {
+  } else if (WALKS) {
     explorer = buildPlayer(camera, renderer.domElement, scene);
     // Defer the lock request one frame so it isn't fighting the click that hid
     // the overlay (Chrome rejects pointer-lock from a synthetic-looking event).
@@ -488,6 +498,26 @@ function boot(preset, mode) {
   }
   if (explorer?.dispose) activeCleanups.push(() => explorer.dispose());
   if (mobileHud?.dispose) activeCleanups.push(() => mobileHud.dispose());
+
+  // ── Photo hunt ────────────────────────────────────────────────────────────
+  let hunt = null;
+  if (PHOTO) {
+    hunt = buildPhotoHunt({
+      camera, renderer, world, templates, mobile: MOBILE,
+      seed: chosenSeed,
+      startSeason: chosenSeason,
+      renderDistance: preset.renderDistance,
+      onSeason: (name) => { setSeason(name, { grass, env, particles: seasonFx }); ps1Exposure(); },
+      onExit: (what) => {
+        returnToMenu();
+        if (what === 'again') {
+          chosenSeed = (Math.random() * 0x7fffffff) | 0;   // a fresh forest and a fresh list
+          chooseMode('photo');
+        }
+      },
+    });
+    activeCleanups.push(() => hunt.dispose());
+  }
   if (post?.composer?.dispose) activeCleanups.push(() => { try { post.composer.dispose(); } catch (_) { /* ignore */ } });
 
   // Surface the back hint briefly.
@@ -507,8 +537,8 @@ function boot(preset, mode) {
   window.addEventListener('keydown', onEscMenu);
   activeCleanups.push(() => window.removeEventListener('keydown', onEscMenu));
 
-  // 'R' re-rolls everything (same as the Randomize button).
-  const onKeyR = (e) => { if (e.code === 'KeyR') randomizeForest(); };
+  // 'R' re-rolls everything (same as the Randomize button). Off during a hunt.
+  const onKeyR = (e) => { if (e.code === 'KeyR' && !PHOTO) randomizeForest(); };
   window.addEventListener('keydown', onKeyR);
   activeCleanups.push(() => window.removeEventListener('keydown', onKeyR));
 
@@ -552,7 +582,7 @@ function boot(preset, mode) {
       return b;
     };
     placeBtn('Exit', returnToMenu);
-    placeBtn('Randomize', randomizeForest);
+    if (!PHOTO) placeBtn('Randomize', randomizeForest);
     placeBtn('Hide UI', () => document.body.classList.add('ui-hidden'));
     // Desktop: 🔊 / 🎵 sit in the same top bar, after the buttons (OFF by default).
     activeCleanups.push(addAudioButtons(btnBar));
@@ -593,6 +623,7 @@ function boot(preset, mode) {
     const t = clock.elapsedTime;
 
     explorer.update(dt, world);
+    hunt?.update(dt);
 
     const counts = world.update(camera);
     grass.update(camera);
@@ -618,6 +649,9 @@ function boot(preset, mode) {
     }
 
     post.composer.render();
+    // The photo is the frame that was just drawn — read it before anything
+    // else touches the buffer.
+    if (hunt?.wantsCapture) hunt.capture();
     frameCount++;
 
     if (t - lastStatTime > 0.5) {

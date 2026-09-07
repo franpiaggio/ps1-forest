@@ -179,5 +179,18 @@ export function buildWorld(scene, templates, { worldSeed = 1337, viewChunks = 4,
     return out;
   }
 
-  return { update, getNearbyTrees, pools, regenerate, setSeed };
+  // Nearest tree (across every loaded chunk) that satisfies `pred`. Used by the
+  // photo hunt to point a lost player toward a species that isn't nearby.
+  function findNearest(x, z, pred) {
+    let best = null, bestD2 = Infinity;
+    for (const t of candidates) {
+      if (!pred(t)) continue;
+      const dx = t.x - x, dz = t.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; best = t; }
+    }
+    return best;
+  }
+
+  return { update, getNearbyTrees, findNearest, pools, regenerate, setSeed };
 }

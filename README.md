@@ -1,8 +1,10 @@
 # PS1 Forest
 
-A first-person walk through an endless procedural forest, rendered like it's 1997.
+A photo hunt in an endless procedural forest, rendered like it's 1997.
 
-**[Open the demo →](https://franpiaggio.github.io/ps1-forest/)**
+**[Play it →](https://franpiaggio.github.io/ps1-forest/)**
+
+You get a shot list and a roll of film. Five subjects — "a large oak, up close", "three aspens in one frame", "a giant" — and twelve exposures to get them. The fog hides everything past thirty metres, so you find your subject by walking, frame it in the viewfinder, and shoot. Every accepted photo turns the season, so a full roll walks you through a year. At the end you get a contact sheet of your five photos, graded, that you can save.
 
 The forest itself is modern: trees grown procedurally with [ez-tree](https://github.com/dgreenheck/ez-tree), instanced foliage, a field of alpha-textured grass streamed as one instanced mesh, rolling terrain, four seasons, wind. Then the whole thing gets pushed through a PlayStation-1 pipeline — vertex snapping, 15-bit colour, a low-res buffer upscaled with nearest-neighbour — and the modern post-processing stack is thrown away.
 
@@ -19,11 +21,19 @@ npm run dev      # http://localhost:5188
 
 ## Controls
 
-**Desktop** — `WASD` to move, mouse (or arrow keys) to look, `Shift` to sprint, `R` to re-roll the world, `Esc` back to the menu. The `lil-gui` panel on the right has a **PS1** folder with live sliders for internal resolution, vertex jitter, colour levels and dither — that's the fastest way to see what each trick actually does.
+**Desktop** — `WASD` to move, mouse (or arrow keys) to look, `Shift` to sprint, `Space` or click to shoot. In Walk mode `R` re-rolls the world. The `lil-gui` panel on the right has a **PS1** folder with live sliders for internal resolution, vertex jitter, colour levels and dither — that's the fastest way to see what each trick actually does.
 
-**Mobile** — joystick bottom-left, drag the right half to look, optional gyroscope on top of that.
+**Mobile** — joystick bottom-left, drag the right half to look, optional gyroscope on top of that, big shutter button bottom-centre.
 
-Before you start, the splash screen picks a graphics tier (auto-detected from cores and memory) and **Forest config** opens a form for density, species mix, terrain and season, plus a dice button for a new world seed.
+Before you start, the splash screen picks a graphics tier (auto-detected from cores and memory) and **Forest config** opens a form for density, species mix, terrain and season, plus a dice button for a new world seed. The same seed always produces the same forest and the same shot list.
+
+## How a photo is graded
+
+There's no image recognition and no hand-placed targets. The game already knows every tree the world streamed in — species, size, position, whether it's one of the rare giants — so when you press the shutter it projects each nearby tree's bounding sphere onto the screen and asks three questions: is it inside the viewfinder, how much of the frame does it fill, and is a nearer trunk standing across it. "Up close" wants the tree filling the frame; "from a distance" wants it out near the fog line; a group shot wants three of the species inside the box at once. The best matching tree sets the grade, C through S. If nothing matches, the message tells you why — not in frame, too far, blocked — and you've spent a frame of film.
+
+After forty seconds without a shot, a small compass points toward the nearest tree that fits the current subject. It's there so a run can't dead-end in a grove of the wrong species; it doesn't tell you how to frame it.
+
+The photo itself is the PS1 buffer read straight off the canvas, so it's a real 640×360 pixelated frame, not a re-render. `Walk` and `Demo` are still there for wandering without a list.
 
 **Demo** is a hands-off camera: four looping GSAP timelines layer a meandering heading, a slow speed inhale/exhale, a buoyant bob with the occasional crane shot above the canopy, and a gaze that pans independently of travel. It's the mode to leave running on a second monitor.
 
@@ -55,6 +65,7 @@ Everything lives in [`src/ps1.js`](src/ps1.js), about a hundred lines.
 | `terrain.js` | A height field shared between JS and GLSL, so ground, trees, grass and player all agree on where the hills are. |
 | `seasons.js` | Per-leaf recolouring that preserves luminance, plus falling leaves, snow or petals. Pines stay green. |
 | `quality.js` | Three tiers (shadow map size, DPR, view distance, grass field radius, leaf reduction), auto-detected and overridable. |
+| `photo.js` | The photo hunt: shot list, framing score, film, season progression, HUD, end-of-roll contact sheet. |
 | `demo.js` | The hands-off camera. |
 | `recorder.js` | `#record` clip capture. |
 
