@@ -134,9 +134,16 @@
         border-color: #bfe4ff; box-shadow: 0 0 12px rgba(95,169,230,0.55);
       }
       .mode-wide { margin-top: 8px; }
-      .mode-game { margin: 0 0 8px; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px; }
-      .mode-game .t { font-size: 16px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-      .mode-game .d { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; opacity: 0.8; }
+      /* The game is the headline: gold like a start button, one click to play. */
+      .mode-game { margin: 0 0 8px; padding: 13px 10px; display: flex; flex-direction: column; gap: 3px;
+                   color: var(--ink); background: linear-gradient(180deg, #ffe27a, #f3c645); border: 1px solid #fff3c0;
+                   box-shadow: 0 0 14px rgba(244,200,74,0.5); }
+      .mode-game:hover { color: var(--ink); background: linear-gradient(180deg, #fff0a8, #ffd866); border-color: #fff8dc;
+                         box-shadow: 0 0 20px rgba(255,220,100,0.75); }
+      .mode-game:active { transform: translateY(1px); }
+      .mode-game .t { font-size: 16px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+      .mode-game .d { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; opacity: 0.75; }
+      .mode:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
       .btn-start {
         width: 100%; margin-top: 16px; padding: 13px; cursor: pointer;
         font: inherit; font-size: 16px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
@@ -197,7 +204,7 @@
         <div class="divider"></div>
 
         <div class="group" style="margin-bottom:0;">
-          <div class="group-label">Mode</div>
+          <div class="group-label">Play</div>
           <button id="mode-photo" class="mode mode-wide mode-game" data-mode="photo" type="button">
             <span class="t">Photo hunt</span><span class="d">find it in the fog · frame it · shoot</span>
           </button>
@@ -206,7 +213,6 @@
             <button id="mode-demo" class="mode" data-mode="demo" type="button">Demo</button>
           </div>
           <button id="mode-inspect" class="mode mode-wide" data-mode="inspect" type="button">Inspect a tree</button>
-          <button id="mode-start" class="btn-start" type="button">Begin ▸</button>
         </div>
 
         <p class="hint" id="splash-hint"></p>

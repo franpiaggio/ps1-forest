@@ -72,7 +72,7 @@ function buildShotList(seed, templates) {
 function describe(shot) {
   if (shot.giant) return 'a giant';
   const sp = shot.species ? SPECIES_NAME[shot.species] : null;
-  if (shot.count) return `${['', 'one', 'two', 'three', 'four'][shot.count]} ${sp}s in one frame`;
+  if (shot.count) return `${['', 'one', 'two', 'three', 'four'][shot.count]} ${sp === 'ash' ? 'ashes' : sp + 's'} in one frame`;
   const size = shot.size ? SIZE_NAME[shot.size] + ' ' : '';
   const noun = sp ? `${size}${sp}` : (size ? `${size}tree` : null);
   const subject = noun ? `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}` : 'any tree';
@@ -147,7 +147,8 @@ export function buildPhotoHunt({
   let busy = false;                    // review card up, ignore the shutter
   let finished = false;
   let elapsed = 0;
-  let sinceLast = 0;
+  let lastShotAt = performance.now();
+  let lastCompassAt = 0;
   const startedAt = performance.now();
 
   // ── DOM ──
@@ -315,7 +316,8 @@ export function buildPhotoHunt({
     if (shot.count) {
       if (subjects.length < shot.count) {
         const anyNear = all.some(p => matches(shot, p.tree, p.tpl));
-        return { ok: false, reason: subjects.length ? `only ${subjects.length} in frame` : (anyNear ? 'not in frame' : `no ${SPECIES_NAME[shot.species]}s here`) };
+        const plural = shot.species === 'ash' ? 'ashes' : `${SPECIES_NAME[shot.species]}s`;
+        return { ok: false, reason: subjects.length ? `only ${subjects.length} in frame` : (anyNear ? 'not in frame' : `no ${plural} here`) };
       }
       // Group shot: grade on how much of the box the group fills + how centred
       // the group's centre is. Take the `count` largest.
@@ -373,7 +375,7 @@ export function buildPhotoHunt({
     if (!wantsCapture) return;
     wantsCapture = false;
     film--;
-    sinceLast = 0;
+    lastShotAt = performance.now();
     compass.classList.remove('show');
     shutterSound();
     flashT = 0.3;
@@ -416,7 +418,7 @@ export function buildPhotoHunt({
 
   // ── Compass hint: after a while without a shot, point toward the subject ──
   function updateCompass() {
-    if (sinceLast < HINT_AFTER || busy || finished) return;
+    if ((performance.now() - lastShotAt) / 1000 < HINT_AFTER || busy || finished) return;
     const shot = shots[idx];
     const t = world.findNearest(camera.position.x, camera.position.z, tr => matches(shot, tr, templates[tr.templateIdx]));
     if (!t) { compass.textContent = 'nothing nearby · keep walking'; compass.classList.add('show'); return; }
@@ -517,8 +519,8 @@ export function buildPhotoHunt({
   function update(dt) {
     if (flashT > 0) { flashT -= dt; flashEl.style.opacity = String(Math.max(0, flashT / 0.3) * 0.9); }
     if (finished) return;
-    sinceLast += dt;
-    if ((sinceLast | 0) !== ((sinceLast - dt) | 0)) updateCompass();   // once a second
+    const now = performance.now();
+    if (now - lastCompassAt > 1000) { lastCompassAt = now; updateCompass(); }   // once a second
   }
 
   function dispose() {

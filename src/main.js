@@ -224,21 +224,25 @@ function revealWhenReady(readyPromise) {
     .then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
     .then(() => { overlay.classList.add('hidden'); });
 }
-// Mode buttons are a SWITCH: clicking one only selects it (highlights), it doesn't
-// boot. The Begin button starts whichever mode is selected.
+// One click boots. Hovering (or focusing) a mode previews its hint; leaving
+// falls back to the default mode's hint.
 const MODE_HINTS = {
   photo:   'five shots · twelve frames of film · one year',
   free:    MOBILE ? 'walk · joystick + drag to look' : 'walk · WASD + mouse · R rerolls the forest',
   demo:    'hands-off camera · sit back',
   inspect: 'one tree · orbit · swap presets',
 };
-function selectMode(mode) {
-  selectedMode = mode;
-  for (const b of modeBtns) b.classList.toggle('selected', b.dataset.mode === mode);
+function showHint(mode) {
   if (splashHint && !RECORD) splashHint.textContent = MODE_HINTS[mode] ?? '';
 }
-for (const b of modeBtns) b.addEventListener('click', () => selectMode(b.dataset.mode));
-selectMode(selectedMode);   // Walk pre-selected
+for (const b of modeBtns) {
+  b.addEventListener('click', () => chooseMode(b.dataset.mode));
+  b.addEventListener('mouseenter', () => showHint(b.dataset.mode));
+  b.addEventListener('focus', () => showHint(b.dataset.mode));
+  b.addEventListener('mouseleave', () => showHint(selectedMode));
+  b.addEventListener('blur', () => showHint(selectedMode));
+}
+showHint(selectedMode);
 if (btnStart) btnStart.addEventListener('click', () => chooseMode(selectedMode));
 
 // ── Return to menu (no page reload) ───────────────────────────────────────────
